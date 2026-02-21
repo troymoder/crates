@@ -1,0 +1,24 @@
+[workspace]
+resolver = "2"
+members = [
+    "cargo-sync-readme2",
+    "embed-changelog",
+    "openapiv3_1",
+    "postcompile",
+    "tinc",
+    "tinc-build",
+    "tinc-cel",
+    "tinc-integration-tests",
+    "tinc-pb-prost",
+    "tinc-proc-macro",
+    "workspace-hack",
+]
+
+[workspace.package]
+authors = ["Troy Benson <troybensonsa@gmail.com>"]
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/troykomodo/crates"
+
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage_nightly)', 'cfg(valgrind)', 'cfg(trybuild_no_target)', 'cfg(postcompile_no_target)'] }

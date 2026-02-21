@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -Dwarnings
+  RUSTDOCFLAGS: -Dwarnings
+  # These are read-only keys for a S3 bucket for sccache caching
+  S3_ENDPOINT: "https://6ca7d4e3d5c9496083876496fc36b8b0.r2.cloudflarestorage.com"
+  S3_BUCKET: "troy-crates-ci"
+  PUBLIC_S3_ACCESS_KEY: "b93e0986c42bc88d2d85dc087f2a94ba"
+  PUBLIC_S3_SECRET_KEY: "60bc5cfd8b121d0acb35d829755b587d29fd8da212c5a81fc4df3be0f433282e"
+
+jobs:
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: &shell bash -c ". $GITHUB_WORKSPACE/.github/scripts/nix-shell.sh {0}"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup environment
+        uses: ./.github/actions/ci-setup
+        with:
+          shell: *shell
+          nix_cache_private_key: ${{ secrets.NIX_CACHE_PRIVATE_KEY }}
+          s3_access_key: ${{ secrets.S3_ACCESS_KEY }}
+          s3_secret_key: ${{ secrets.S3_SECRET_KEY }}
+
+      - name: Check formatting
+        run: just fmt
+
+      - name: Check for changes
+        run: git diff --exit-code
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: *shell
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup environment
+        uses: ./.github/actions/ci-setup
+        with:
+          shell: *shell
+          nix_cache_private_key: ${{ secrets.NIX_CACHE_PRIVATE_KEY }}
+          s3_access_key: ${{ secrets.S3_ACCESS_KEY }}
+          s3_secret_key: ${{ secrets.S3_SECRET_KEY }}
+
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: *shell
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup environment
+        uses: ./.github/actions/ci-setup
+        with:
+          shell: *shell
+          nix_cache_private_key: ${{ secrets.NIX_CACHE_PRIVATE_KEY }}
+          s3_access_key: ${{ secrets.S3_ACCESS_KEY }}
+          s3_secret_key: ${{ secrets.S3_SECRET_KEY }}
+
+      - name: Run tests
+        run: just test
+
+  doc:
+    name: Documentation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: *shell
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup environment
+        uses: ./.github/actions/ci-setup
+        with:
+          shell: *shell
+          nix_cache_private_key: ${{ secrets.NIX_CACHE_PRIVATE_KEY }}
+          s3_access_key: ${{ secrets.S3_ACCESS_KEY }}
+          s3_secret_key: ${{ secrets.S3_SECRET_KEY }}
+
+      - name: Check documentation
+        run: just doc

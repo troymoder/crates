@@ -1,0 +1,58 @@
+[package]
+name = "postcompile"
+version = "0.3.3"
+authors.workspace = true
+build = "build.rs"
+documentation = "https://docs.rs/postcompile"
+edition.workspace = true
+keywords = ["postcompile", "snapshot", "test", "proc-macro"]
+license.workspace = true
+readme = "README.md"
+repository.workspace = true
+description = "Helper crate for post-compiling Rust code."
+
+[lints]
+workspace = true
+
+[features]
+## Enables changelog and documentation of feature flags
+docs = ["dep:embed-changelog", "dep:document-features"]
+
+[dependencies]
+cargo-manifest = "0.19"
+cargo_metadata = "0.23"
+document-features = { optional = true, version = "0.2" }
+embed-changelog = { optional = true, path = "../embed-changelog", version = "0.1" }
+prettyplease = "0.2"
+regex = "1"
+serde = "1"
+serde_derive = "1"
+serde_json = "1"
+syn = "2"
+target-triple = "0.1"
+toml = "0.9"
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+insta = "1"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = [
+    "--cfg",
+    "docsrs",
+    "--sort-modules-by-appearance",
+    "--generate-link-to-definition",
+]
+
+[package.metadata.sync-readme]
+features = ["docs"]
+
+[package.metadata.sync-readme.rustdoc-mappings]
+changelog = "./CHANGELOG.md"
+
+[package.metadata.sync-readme.badges]
+docs-rs = true
+crates-io = true
+license = true
+codecov = true

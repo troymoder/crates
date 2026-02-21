@@ -1,0 +1,65 @@
+[workspace]
+release_always = false
+pr_labels = ["release"]
+publish_timeout = "10m"
+repo_url = "https://github.com/troykomodo/crates"
+semver_check = true
+
+[changelog]
+body = """
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | upper_first }}
+
+{% for commit in commits -%}
+- {% if commit.scope %}*({{ commit.scope }})* {% endif %}{% if commit.breaking %}**breaking** {% endif %}{{ commit.message }}
+{% endfor %}
+{% endfor %}
+"""
+commit_parsers = [
+    { message = "^feat", group = "Added" },
+    { message = "^fix", group = "Fixed" },
+    { message = "^docs", group = "Documentation" },
+    { message = "^perf", group = "Performance" },
+    { message = "^refactor", group = "Refactored" },
+    { message = "^test", group = "Testing" },
+    { message = "^chore\\(release\\)", skip = true },
+    { message = "^chore\\(deps\\)", group = "Dependencies" },
+    { message = "^chore", group = "Miscellaneous" },
+    { message = "^ci", skip = true },
+]
+protect_breaking_commits = true
+
+[[package]]
+name = "tinc"
+version_group = "tinc"
+changelog_include = ["tinc-build", "tinc-cel", "tinc-proc-macro", "tinc-pb-prost"]
+
+[[package]]
+name = "tinc-build"
+version_group = "tinc"
+changelog_update = false
+
+[[package]]
+name = "tinc-cel"
+version_group = "tinc"
+changelog_update = false
+
+[[package]]
+name = "tinc-pb-prost"
+version_group = "tinc"
+changelog_update = false
+
+[[package]]
+name = "tinc-proc-macro"
+version_group = "tinc"
+changelog_update = false
+
+[[package]]
+name = "tinc-integration-tests"
+release = false
+changelog_update = false
+
+[[package]]
+name = "workspace-hack"
+release = false
+changelog_update = false

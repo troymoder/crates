@@ -1,0 +1,23 @@
+name: Setup SCCache
+description: Starts sccache server in the background (requires Nix and nix develop)
+inputs:
+  shell:
+    required: true
+    description: "Shell to use"
+runs:
+  using: "composite"
+  steps:
+    - name: Write GCS key for SCCache
+      shell: ${{ inputs.shell }}
+      run: |
+        echo "SCCACHE_GHA_ENABLED=false" >> $GITHUB_ENV
+        echo "SCCACHE_BUCKET=${{ env.S3_BUCKET }}" >> $GITHUB_ENV
+        echo "SCCACHE_ENDPOINT=${{ env.S3_ENDPOINT }}" >> $GITHUB_ENV
+        echo "SCCACHE_S3_KEY_PREFIX=cache/sccache" >> $GITHUB_ENV
+
+    - name: Start SCCache server
+      shell: ${{ inputs.shell }}
+      run: |
+        set -xeo pipefail
+        sccache --start-server
+        sccache -z

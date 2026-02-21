@@ -1,0 +1,51 @@
+[package]
+name = "tinc-pb-prost"
+version = "0.2.0"
+authors.workspace = true
+documentation = "https://docs.rs/tinc-pb-prost"
+edition.workspace = true
+keywords = ["grpc", "protobuf", "prost", "codegen"]
+license.workspace = true
+readme = "README.md"
+repository.workspace = true
+description = "Protobuf generated schama for tinc"
+
+[lints]
+workspace = true
+
+[features]
+## Enables documentation of feature flags
+docs = ["dep:document-features"]
+
+[dependencies]
+document-features = { optional = true, version = "0.2" }
+prost = "0.14"
+prost-types = "0.14"
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[build-dependencies]
+prost = "0.14"
+prost-types = "0.14"
+prost-build = "0.14"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = [
+    "--cfg",
+    "docsrs",
+    "--sort-modules-by-appearance",
+    "--generate-link-to-definition",
+]
+
+[package.metadata.sync-readme]
+features = ["docs"]
+
+[package.metadata.sync-readme.rustdoc-mappings]
+changelog = "./CHANGELOG.md"
+Annotations = "./annotations.proto"
+
+[package.metadata.sync-readme.badges]
+docs-rs = true
+crates-io = true
+license = true
+codecov = true

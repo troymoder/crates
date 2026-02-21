@@ -1,0 +1,58 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.2.0](https://github.com/ScuffleCloud/scuffle/releases/tag/tinc-v0.2.0) - 2025-08-06
+
+[View diff on diff.rs](https://diff.rs/tinc/0.1.7/tinc/0.2.0/Cargo.toml)
+
+- chore: bump tonic & prost versions to 0.14 ([#511](https://github.com/scufflecloud/scuffle/pull/511)) (@TroyKomodo)
+
+## [0.1.7](https://github.com/ScuffleCloud/scuffle/releases/tag/tinc-v0.1.7) - 2025-07-12
+
+[View diff on diff.rs](https://diff.rs/tinc/0.1.6/tinc/0.1.7/Cargo.toml)
+
+- chore: fix clippy::manual_is_multiple_of ([#504](https://github.com/scufflecloud/scuffle/pull/504)) (@lennartkloock)
+
+## [0.1.6](https://github.com/ScuffleCloud/scuffle/releases/tag/tinc-v0.1.6) - 2025-06-16
+
+[View diff on diff.rs](https://diff.rs/tinc/0.1.5/tinc/0.1.6/Cargo.toml)
+
+- chore: update fmt style ([#496](https://github.com/scufflecloud/scuffle/pull/496)) (@troykomodo)
+
+## [0.1.5](https://github.com/ScuffleCloud/scuffle/releases/tag/tinc-v0.1.5) - 2025-06-11
+
+[View diff on diff.rs](https://diff.rs/tinc/0.1.4/tinc/0.1.5/Cargo.toml)
+
+- chore: bump mediatype to `0.20` ([#491](https://github.com/scufflecloud/scuffle/pull/491)) (@troykomodo)
+
+## [0.1.4](https://github.com/ScuffleCloud/scuffle/releases/tag/tinc-v0.1.4) - 2025-06-09
+
+[View diff on diff.rs](https://diff.rs/tinc/0.1.3/tinc/0.1.4/Cargo.toml)
+
+- feat: allow generating root module which will include all protos ([#455](https://github.com/scufflecloud/scuffle/pull/455)) (@troykomodo)
+- fix: fix codegen for non-message service inputs ([#455](https://github.com/scufflecloud/scuffle/pull/455)) (@troykomodo)
+
+## [0.1.3](https://github.com/ScuffleCloud/scuffle/releases/tag/tinc-v0.1.3) - 2025-05-30
+
+[View diff on diff.rs](https://diff.rs/tinc/0.1.2/tinc/0.1.3/Cargo.toml)
+
+- chore: cleaned up grouped dependencies ([#473](https://github.com/scufflecloud/scuffle/pull/473)) (@troykomodo)
+
+## [0.1.2](https://github.com/ScuffleCloud/scuffle/releases/tag/tinc-v0.1.2) - 2025-05-17
+
+[View diff on diff.rs](https://diff.rs/tinc/0.1.1/tinc/0.1.2/Cargo.toml)
+
+- chore: fix changelog entry & release process ([#465](https://github.com/scufflecloud/scuffle/pull/465)) (@troykomodo, @SimaoMoreira5228, @philipch07)
+
+## [0.1.1](https://github.com/ScuffleCloud/scuffle/releases/tag/tinc-v0.1.1) - 2025-05-14
+
+[View diff on diff.rs](https://diff.rs/tinc/0.1.0/tinc/0.1.1/Cargo.toml)
+
+- chore: cleanup readme and crate docs ([#458](https://github.com/scufflecloud/scuffle/pull/458)) (@troykomodo)
+- feat: initial implementation ([#405](https://github.com/scufflecloud/scuffle/pull/405)) (@troykomodo)

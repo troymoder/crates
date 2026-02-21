@@ -1,0 +1,59 @@
+[package]
+name = "openapiv3_1"
+version = "0.1.3"
+authors.workspace = true
+documentation = "https://docs.rs/openapiv3_1"
+edition.workspace = true
+keywords = ["openapi", "jsonschema", "json"]
+license.workspace = true
+readme = "README.md"
+repository.workspace = true
+description = "OpenAPI 3.1.x bindings for rust"
+
+[lints]
+workspace = true
+
+[features]
+## Enables changelog and documentation of feature flags
+docs = ["dep:embed-changelog", "dep:document-features"]
+## Enable derive(Debug) on all types
+debug = []
+## Enables `to_yaml` function.
+yaml = ["dep:serde_norway"]
+
+[dependencies]
+bon = "3"
+document-features = { optional = true, version = "0.2" }
+embed-changelog = { optional = true, path = "../embed-changelog", version = "0.1" }
+indexmap = { features = ["serde"], version = "2" }
+is_empty = { features = ["std_impls"], version = "0.3" }
+ordered-float = { features = ["serde"], version = "5" }
+serde = "1"
+serde_derive = "1"
+serde_json = "1"
+serde_norway = { optional = true, version = "0.9" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+insta = { features = ["json", "redactions"], version = "1" }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = [
+    "--cfg",
+    "docsrs",
+    "--sort-modules-by-appearance",
+    "--generate-link-to-definition",
+]
+
+[package.metadata.sync-readme]
+features = ["docs"]
+
+[package.metadata.sync-readme.rustdoc-mappings]
+changelog = "./CHANGELOG.md"
+
+[package.metadata.sync-readme.badges]
+docs-rs = true
+crates-io = true
+license = true
+codecov = true

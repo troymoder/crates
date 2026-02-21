@@ -1,0 +1,9 @@
+[profile.default]
+retries = 5
+
+[profile.default.junit]
+path = "junit.xml"
+
+[profile.ci]
+retries = { backoff = "exponential", count = 3, delay = "5s" }
+fail-fast = false

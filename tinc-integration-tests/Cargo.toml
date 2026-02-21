@@ -1,0 +1,31 @@
+[package]
+name = "tinc-integration-tests"
+edition.workspace = true
+license.workspace = true
+publish = false
+readme = "README.md"
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+bytes = "1"
+http = "1"
+http-body-util = "0.1"
+insta = { features = ["json"], version = "1" }
+prost = "0.14"
+prost-types = "0.14"
+rand = "0.9"
+serde = "1"
+serde_json = "1"
+tinc = { path = "../tinc" }
+tokio = { features = ["full"], version = "1" }
+tonic = "0.14"
+tower = "0.5"
+
+[build-dependencies]
+prost-build = "0.14"
+tinc-build = { path = "../tinc-build" }
+
+[dependencies]
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
