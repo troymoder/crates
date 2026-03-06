@@ -1,6 +1,6 @@
 [package]
 name = "postcompile"
-version = "0.3.3"
+version = "0.3.4"
 authors.workspace = true
 build = "build.rs"
 documentation = "https://docs.rs/postcompile"

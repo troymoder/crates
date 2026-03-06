@@ -1,6 +1,6 @@
 [package]
 name = "tinc-cel"
-version = "0.2.0"
+version = "0.2.1"
 authors.workspace = true
 documentation = "https://docs.rs/tinc-cel"
 edition.workspace = true
