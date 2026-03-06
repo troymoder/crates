@@ -26,5 +26,4 @@ runs:
     - name: Show sccache stats
       uses: gacts/run-and-post-run@v1
       with:
-        shell: .github/scripts/nix-shell.sh bash
-        post: sccache -s
+        post: .github/scripts/nix-shell.sh sccache -s

@@ -61,7 +61,7 @@ runs:
           max-jobs = auto
           http-connections = 128
           connect-timeout = 5
-          substituters = https://cache.nixos.org ${{ env.NIX_CACHE_URL }}
+          substituters = https://cache.nixos.org https://ci-cache.troymoder.dev/cache/nix
           trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= troy-crates-nix-cache:Gzil33SGyR5pzjFPe1l4ACZy2lfXi3Y5R5cO6BmOwkE=⏎
           post-build-hook = ${{ github.workspace }}/.github/scripts/nix-post-build-hook.sh
 
