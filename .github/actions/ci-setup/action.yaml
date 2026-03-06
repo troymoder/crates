@@ -26,7 +26,7 @@ runs:
     - name: Setup nix build paths file
       shell: bash
       env:
-        NIX_CACHE_URL: s3://${{ env.S3_BUCKET }}/cache/nix?endpoint=${{ env.S3_ENDPOINT }}&compression=zstd&parallel-compression=true
+        NIX_CACHE_URL: s3://${{ env.S3_BUCKET }}/cache/nix?endpoint=${{ env.S3_ENDPOINT }}&scheme=https&compression=zstd&parallel-compression=true
       run: |
         echo "NIX_CACHE_URL=${NIX_CACHE_URL}" >> $GITHUB_ENV
 

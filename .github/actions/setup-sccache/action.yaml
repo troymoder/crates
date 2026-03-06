@@ -12,7 +12,7 @@ runs:
       run: |
         echo "SCCACHE_GHA_ENABLED=false" >> $GITHUB_ENV
         echo "SCCACHE_BUCKET=${{ env.S3_BUCKET }}" >> $GITHUB_ENV
-        echo "SCCACHE_ENDPOINT=${{ env.S3_ENDPOINT }}" >> $GITHUB_ENV
+        echo "SCCACHE_ENDPOINT=https://${{ env.S3_ENDPOINT }}" >> $GITHUB_ENV
         echo "SCCACHE_S3_KEY_PREFIX=cache/sccache" >> $GITHUB_ENV
         echo "SCCACHE_REGION=auto" >> $GITHUB_ENV
 
