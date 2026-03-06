@@ -15,7 +15,7 @@ fi
 if [[ -s /tmp/nix-built-paths.txt ]]; then
     echo "Uploading $(wc -l < /tmp/nix-built-paths.txt) paths to cache..."
     nix copy \
-        --to "${NIX_CACHE_UPLOAD_URL}&secret-key=/tmp/nix-cache-key.pem&multipart-upload=true" \
+        --to "${NIX_CACHE_URL}&secret-key=/tmp/nix-cache-key.pem&multipart-upload=true" \
         $(sort -u /tmp/nix-built-paths.txt | tr '\n' ' ') \
         || echo "Warning: nix copy failed, continuing anyway"
 else
