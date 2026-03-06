@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- fix sync-readme
+
+
 ## [0.2.0](https://github.com/ScuffleCloud/scuffle/releases/tag/tinc-v0.2.0) - 2025-08-06
 
 [View diff on diff.rs](https://diff.rs/tinc/0.1.7/tinc/0.2.0/Cargo.toml)

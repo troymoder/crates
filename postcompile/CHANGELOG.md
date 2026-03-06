@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- fix sync-readme
+
+
 ## [0.3.3](https://github.com/ScuffleCloud/scuffle/releases/tag/postcompile-v0.3.3) - 2025-08-06
 
 [View diff on diff.rs](https://diff.rs/postcompile/0.3.2/postcompile/0.3.3/Cargo.toml)

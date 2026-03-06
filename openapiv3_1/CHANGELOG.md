@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- fix sync-readme
+
+
 ## [0.1.3](https://github.com/ScuffleCloud/scuffle/releases/tag/openapiv3_1-v0.1.3) - 2025-05-30
 
 [View diff on diff.rs](https://diff.rs/openapiv3_1/0.1.2/openapiv3_1/0.1.3/Cargo.toml)
