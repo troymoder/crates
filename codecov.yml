@@ -1,0 +1,45 @@
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+    patch:
+      default:
+        target: auto
+        threshold: 1%
+
+component_management:
+  default_rules:
+    statuses:
+      - type: project
+        target: auto
+        threshold: 1%
+      - type: patch
+        target: auto
+        threshold: 1%
+  individual_components:
+    - component_id: cargo-sync-readme2
+      name: cargo-sync-readme2
+      paths:
+        - cargo-sync-readme2/**
+    - component_id: embed-changelog
+      name: embed-changelog
+      paths:
+        - embed-changelog/**
+    - component_id: openapiv3_1
+      name: openapiv3_1
+      paths:
+        - openapiv3_1/**
+    - component_id: postcompile
+      name: postcompile
+      paths:
+        - postcompile/**
+    - component_id: tinc
+      name: tinc
+      paths:
+        - tinc/**
+        - tinc-build/**
+        - tinc-cel/**
+        - tinc-pb-prost/**
+        - tinc-proc-macro/**

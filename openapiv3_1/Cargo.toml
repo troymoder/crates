@@ -56,4 +56,4 @@ changelog = "./CHANGELOG.md"
 docs-rs = true
 crates-io = true
 license = true
-codecov = true
+codecov.component = "openapiv3_1"

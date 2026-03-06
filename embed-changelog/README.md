@@ -12,7 +12,7 @@
 ![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-purple.svg?style=flat-square)
 ![Crates.io Size](https://img.shields.io/crates/size/embed-changelog/0.1.0.svg?style=flat-square)
 ![Crates.io Downloads](https://img.shields.io/crates/dv/embed-changelog/0.1.0.svg?&label=downloads&style=flat-square)
-[![Codecov](https://img.shields.io/codecov/c/github/troykomodo/crates.svg?label=codecov&logo=codecov&style=flat-square)](https://app.codecov.io/gh/troykomodo/crates)
+[![Codecov](https://img.shields.io/codecov/c/github/troykomodo/crates.svg?label=codecov&logo=codecov&style=flat-square&component=embed-changelog)](https://app.codecov.io/gh/troykomodo/crates)
 <!-- sync-readme ]] -->
 
 ---
