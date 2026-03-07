@@ -38,6 +38,7 @@
               cargo-nextest
               cargo-hakari
               cargo-llvm-cov
+              cargo-semver-checks
               protobuf_33
               sccache
               mold
