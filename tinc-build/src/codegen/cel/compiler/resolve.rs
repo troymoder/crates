@@ -290,7 +290,7 @@ fn resolve_member(ctx: &Compiler, expr: &Expression, member: &Member) -> Result<
                     Ok(CompiledExpr::runtime(
                         CelType::Proto(field_ty.ty.clone()),
                         parse_quote! {
-                            &(#expr).#field_ident,
+                            &(#expr).#field_ident
                         },
                     ))
                 }

@@ -848,6 +848,54 @@ pub(super) fn handle_message(
         )?;
     }
 
+    // Handle message-level CEL expressions
+    if !message.options.cel.is_empty() {
+        let compiler = Compiler::new(registry);
+        let mut ctx = compiler.child();
+        ctx.add_variable(
+            "input",
+            CompiledExpr::runtime(
+                CelType::Proto(ProtoType::Value(ProtoValueType::Message(message.full_name.clone()))),
+                parse_quote!(___input),
+            ),
+        );
+
+        let mut message_cel_exprs = Vec::new();
+        for expr in &message.options.cel {
+            let mut expr_ctx = ctx.child();
+            if let Some(this) = expr.this.clone() {
+                expr_ctx.add_variable("this", CompiledExpr::constant(this));
+            }
+            let parsed = cel_parser::parse(&expr.expression).context("message-level cel expression parse")?;
+            let resolved = expr_ctx.resolve(&parsed).context("message-level cel expression")?;
+            let expr_str = &expr.expression;
+            let message_str = eval_message_fmt(&message.full_name, &expr.message, &expr_ctx).context("message-level cel message")?;
+
+            message_cel_exprs.push(quote! {
+                if !::tinc::__private::cel::to_bool({
+                    (|| {
+                        ::core::result::Result::Ok::<_, ::tinc::__private::cel::CelError>(#resolved)
+                    })().map_err(|err| {
+                        ::tinc::__private::ValidationError::Expression {
+                            error: err.to_string().into_boxed_str(),
+                            field: "",
+                            expression: #expr_str,
+                        }
+                    })?
+                }) {
+                    ::tinc::__private::report_tracked_error(
+                        ::tinc::__private::TrackedError::invalid_field(#message_str)
+                    )?;
+                }
+            });
+        }
+
+        cel_validation_fn.push(quote! {{
+            let ___input = self;
+            #(#message_cel_exprs)*
+        }});
+    }
+
     let bug_message = quote::quote!(::core::unreachable!(
         "message has no fields, this should never happen, please report this as a bug in tinc"
     ));
