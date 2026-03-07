@@ -1,0 +1,56 @@
+name: CI Statuses
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches:
+      - main
+
+env:
+  CONTEXT: CI/CD
+
+jobs:
+  on-requested:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.action == 'requested' }}
+    permissions:
+      statuses: write
+    steps:
+      - name: Set commit status as pending
+        uses: myrotvorets/set-commit-status-action@master
+        with:
+          status: pending
+          context: ${{ env.CONTEXT }}
+          sha: ${{ github.event.workflow_run.head_sha }}
+          targetUrl: ${{ github.event.workflow_run.html_url }}
+          description: CI has been requested
+
+  on-in-progress:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.action == 'in_progress' }}
+    permissions:
+      statuses: write
+    steps:
+      - name: Set commit status as in progress
+        uses: myrotvorets/set-commit-status-action@master
+        with:
+          status: in_progress
+          context: ${{ env.CONTEXT }}
+          sha: ${{ github.event.workflow_run.head_sha }}
+          targetUrl: ${{ github.event.workflow_run.html_url }}
+          description: CI is running
+
+  on-completed:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.action == 'completed' }}
+    permissions:
+      statuses: write
+    steps:
+      - name: Set commit status
+        uses: myrotvorets/set-commit-status-action@master
+        with:
+          status: ${{ github.event.workflow_run.conclusion == 'success' && 'success' || 'failure' }}
+          context: ${{ env.CONTEXT }}
+          sha: ${{ github.event.workflow_run.head_sha }}
+          targetUrl: ${{ github.event.workflow_run.html_url }}
+          description: CI has completed with a result of ${{ github.event.workflow_run.conclusion }}
