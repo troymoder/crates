@@ -1,6 +1,6 @@
 [package]
 name = "tinc-pb-prost"
-version = "0.2.2"
+version = "0.2.3"
 authors.workspace = true
 documentation = "https://docs.rs/tinc-pb-prost"
 edition.workspace = true

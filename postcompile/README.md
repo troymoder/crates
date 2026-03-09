@@ -7,11 +7,11 @@
 > This crate is under active development and may not be stable.
 
 <!-- sync-readme badge [[ -->
-[![docs.rs](https://img.shields.io/docsrs/postcompile/0.3.5.svg?logo=docs.rs&label=docs.rs&style=flat-square)](https://docs.rs/postcompile/0.3.5)
-[![crates.io](https://img.shields.io/badge/crates.io-v0.3.5-orange?style=flat-square&logo=rust&logoColor=white)](https://crates.io/crates/postcompile/0.3.5)
+[![docs.rs](https://img.shields.io/docsrs/postcompile/0.3.6.svg?logo=docs.rs&label=docs.rs&style=flat-square)](https://docs.rs/postcompile/0.3.6)
+[![crates.io](https://img.shields.io/badge/crates.io-v0.3.6-orange?style=flat-square&logo=rust&logoColor=white)](https://crates.io/crates/postcompile/0.3.6)
 ![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-purple.svg?style=flat-square)
-![Crates.io Size](https://img.shields.io/crates/size/postcompile/0.3.5.svg?style=flat-square)
-![Crates.io Downloads](https://img.shields.io/crates/dv/postcompile/0.3.5.svg?&label=downloads&style=flat-square)
+![Crates.io Size](https://img.shields.io/crates/size/postcompile/0.3.6.svg?style=flat-square)
+![Crates.io Downloads](https://img.shields.io/crates/dv/postcompile/0.3.6.svg?&label=downloads&style=flat-square)
 [![Codecov](https://img.shields.io/codecov/c/github/troymoder/crates.svg?label=codecov&logo=codecov&style=flat-square&component=postcompile)](https://app.codecov.io/gh/troymoder/crates)
 <!-- sync-readme ]] -->
 
