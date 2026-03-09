@@ -2,7 +2,7 @@
 release_always = false
 pr_labels = ["release"]
 publish_timeout = "10m"
-repo_url = "https://github.com/troykomodo/crates"
+repo_url = "https://github.com/troymoder/crates"
 semver_check = true
 pr_branch_prefix = "release-pr"
 

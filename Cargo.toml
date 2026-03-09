@@ -15,10 +15,10 @@ members = [
 ]
 
 [workspace.package]
-authors = ["Troy Benson <troybensonsa@gmail.com>"]
+authors = ["Troy Benson <me@troymoder.dev>"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/troykomodo/crates"
+repository = "https://github.com/troymoder/crates"
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage_nightly)', 'cfg(valgrind)', 'cfg(trybuild_no_target)', 'cfg(postcompile_no_target)'] }
