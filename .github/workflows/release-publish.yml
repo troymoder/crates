@@ -45,3 +45,9 @@ jobs:
           s3_bucket: ${{ vars.S3_CACHE_BUCKET }}
           s3_endpoint: ${{ vars.S3_CACHE_ENDPOINT }}
           sccache_command: ${{ github.workspace }}/.github/scripts/nix-shell.sh sccache
+
+      - name: Release crates
+        env:
+          GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: release-plz release
