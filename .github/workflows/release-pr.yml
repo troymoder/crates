@@ -16,10 +16,10 @@ jobs:
   release-pr:
     name: Release PR
     runs-on: ubuntu-latest
+    environment: release pr
     if: ${{ github.repository_owner == 'troymoder' }}
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     defaults:
       run:
         shell: ${{ github.workspace }}/.github/scripts/nix-shell.sh bash -e {0}
@@ -63,6 +63,14 @@ jobs:
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Generate GitHub Token
+        if: ${{ steps.changes.outputs.has_changes == 'true' }}
+        uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+
       - name: Create PR
         if: ${{ steps.changes.outputs.has_changes == 'true' }}
         uses: peter-evans/create-pull-request@v8
@@ -72,3 +80,4 @@ jobs:
           body-path: ${{ runner.temp }}/release-body.txt
           branch: release-pr
           labels: release
+          token: ${{ steps.app-token.outputs.token }}
