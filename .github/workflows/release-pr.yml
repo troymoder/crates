@@ -7,10 +7,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  S3_ENDPOINT: "6ca7d4e3d5c9496083876496fc36b8b0.r2.cloudflarestorage.com"
-  S3_BUCKET: "troy-crates-ci"
-  PUBLIC_S3_ACCESS_KEY: "b93e0986c42bc88d2d85dc087f2a94ba"
-  PUBLIC_S3_SECRET_KEY: "60bc5cfd8b121d0acb35d829755b587d29fd8da212c5a81fc4df3be0f433282e"
 
 concurrency:
   group: release-pr-${{ github.ref }}
@@ -26,22 +22,31 @@ jobs:
       pull-requests: write
     defaults:
       run:
-        shell: &shell bash -c ". $GITHUB_WORKSPACE/.github/scripts/nix-shell.sh {0}"
+        shell: ${{ github.workspace }}/.github/scripts/nix-shell.sh {0}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
 
       - name: Setup environment
-        uses: ./.github/actions/ci-setup
+        uses: troymoder/shared-actions/setup-nix@0445b4839de516226e314213dcb15fe4461109c3
         with:
-          shell: *shell
           nix_cache_private_key: ${{ secrets.NIX_CACHE_PRIVATE_KEY }}
-          s3_access_key: ${{ secrets.S3_ACCESS_KEY }}
-          s3_secret_key: ${{ secrets.S3_SECRET_KEY }}
-          sccache_enabled: "false"
+          nix_cache_public_key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
+          s3_bucket: ${{ vars.S3_CACHE_BUCKET }}
+          s3_endpoint: ${{ vars.S3_CACHE_ENDPOINT }}
+          s3_public_url: ${{ vars.S3_CACHE_PUBLIC_URL }}
+          s3_access_key: ${{ secrets.S3_CACHE_BUCKET_ACCESS_KEY || vars.S3_CACHE_BUCKET_PUBLIC_ACCESS_KEY }}
+          s3_secret_key: ${{ secrets.S3_CACHE_BUCKET_ACCESS_SECRET_KEY || vars.S3_CACHE_BUCKET_PUBLIC_ACCESS_SECRET_KEY }}
 
+      - name: Setup sccache
+        uses: troymoder/shared-actions/setup-sccache@0445b4839de516226e314213dcb15fe4461109c3
+        with:
+          s3_bucket: ${{ vars.S3_CACHE_BUCKET }}
+          s3_endpoint: ${{ vars.S3_CACHE_ENDPOINT }}
+          sccache_command: ${{ github.workspace }}/.github/scripts/nix-shell.sh sccache
+          
       - name: Update crates
-        run: release-plz update > /tmp/release-body.txt
+        run: release-plz update > ${{ runner.temp }}/release-body.txt
 
       - name: Sync README
         run: just sync-readme
@@ -59,11 +64,11 @@ jobs:
           fi
 
       - name: Create PR
-        if: steps.changes.outputs.has_changes == 'true'
+        if: ${{ steps.changes.outputs.has_changes == 'true' }}
         uses: peter-evans/create-pull-request@v8
         with:
           title: "chore: release"
           commit-message: "chore: release"
-          body-path: /tmp/release-body.txt
+          body-path: ${{ runner.temp }}/release-body.txt
           branch: release-pr
           labels: release
