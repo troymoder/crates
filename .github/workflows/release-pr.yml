@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Setup environment
-        uses: troymoder/shared-actions/setup-nix@3f0cff7eef25ca0fb3b1e7b624b0745a99c9234a
+        uses: troymoder/shared-actions/setup-nix@b114355b5a126b78c9e19920afa01075a32ee39e
         with:
           nix_cache_private_key: ${{ secrets.NIX_CACHE_PRIVATE_KEY }}
           nix_cache_public_key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
@@ -39,7 +39,7 @@ jobs:
           s3_secret_access_key: ${{ secrets.S3_CACHE_BUCKET_SECRET_ACCESS_KEY || vars.S3_CACHE_BUCKET_PUBLIC_SECRET_ACCESS_KEY }}
 
       - name: Setup sccache
-        uses: troymoder/shared-actions/setup-sccache@3f0cff7eef25ca0fb3b1e7b624b0745a99c9234a
+        uses: troymoder/shared-actions/setup-sccache@b114355b5a126b78c9e19920afa01075a32ee39e
         with:
           s3_bucket: ${{ vars.S3_CACHE_BUCKET }}
           s3_endpoint: ${{ vars.S3_CACHE_ENDPOINT }}
