@@ -1,11 +1,10 @@
 ---
-source: crates/postcompile/src/lib.rs
+source: postcompile/src/lib.rs
 expression: out
 ---
 exit status: 0
 --- expanded
 #![feature(prelude_import)]
-#[macro_use]
 extern crate std;
 #[prelude_import]
 use std::prelude::rust_2024::*;

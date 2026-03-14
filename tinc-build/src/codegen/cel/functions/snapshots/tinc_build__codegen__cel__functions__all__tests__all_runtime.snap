@@ -1,6 +1,6 @@
 ---
-source: crates/tinc/build/src/codegen/cel/functions/all.rs
-expression: "postcompile::compile_str!(postcompile::config!\n{\n    test: true, dependencies:\n    vec![postcompile::Dependency::version(\"tinc\", \"*\"),],\n}, quote!\n{\n    #[allow(dead_code)] fn runtime_slice(input: &[i32],) -> Result<bool,\n    ::tinc::__private::cel::CelError<'static>> { Ok(#result) }\n    #[allow(dead_code)] fn runtime_vec(input: &Vec<i32>,) -> Result<bool,\n    ::tinc::__private::cel::CelError<'static>> { Ok(#result) } #[test] fn\n    test_empty_lists()\n    {\n        assert!(runtime_slice(&[]).unwrap());\n        assert!(runtime_vec(&vec![]).unwrap());\n        assert!(runtime_slice(&[3, 4, 5]).unwrap());\n        assert!(runtime_vec(&vec![3, 4, 5]).unwrap());\n        assert!(!runtime_slice(&[3, 4, 5, 2]).unwrap());\n        assert!(!runtime_vec(&vec![3, 4, 5, 2]).unwrap());\n    }\n},)"
+source: tinc-build/src/codegen/cel/functions/all.rs
+expression: "postcompile::compile_str!(postcompile::config!\n{\n    test: true, dependencies:\n    vec![postcompile::Dependency::path(\"tinc\", \"../tinc\"),],\n}, quote!\n{\n    #[allow(dead_code)] fn runtime_slice(input: &[i32],) -> Result<bool,\n    ::tinc::__private::cel::CelError<'static>> { Ok(#result) }\n    #[allow(dead_code)] fn runtime_vec(input: &Vec<i32>,) -> Result<bool,\n    ::tinc::__private::cel::CelError<'static>> { Ok(#result) } #[test] fn\n    test_empty_lists()\n    {\n        assert!(runtime_slice(&[]).unwrap());\n        assert!(runtime_vec(&vec![]).unwrap());\n        assert!(runtime_slice(&[3, 4, 5]).unwrap());\n        assert!(runtime_vec(&vec![3, 4, 5]).unwrap());\n        assert!(!runtime_slice(&[3, 4, 5, 2]).unwrap());\n        assert!(!runtime_vec(&vec![3, 4, 5, 2]).unwrap());\n    }\n},)"
 ---
 exit status: 0
 --- test_stdout
@@ -9,7 +9,6 @@ running 1 test
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in [ELAPSED]s
 --- expanded
 #![feature(prelude_import)]
-#[macro_use]
 extern crate std;
 #[prelude_import]
 use std::prelude::rust_2024::*;
