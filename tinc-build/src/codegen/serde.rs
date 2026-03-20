@@ -1,4 +1,3 @@
-use anyhow::Context;
 use quote::{ToTokens, quote};
 use syn::parse_quote;
 
@@ -6,6 +5,7 @@ use super::Package;
 use super::cel::compiler::{CompiledExpr, Compiler};
 use super::cel::types::CelType;
 use super::cel::{CelExpression, eval_message_fmt, functions};
+use crate::error::SerdeError;
 use crate::types::{
     ProtoEnumType, ProtoFieldOptions, ProtoFieldSerdeOmittable, ProtoMessageField,
     ProtoMessageType, ProtoModifiedValueType, ProtoOneOfType, ProtoType, ProtoTypeRegistry,
@@ -18,7 +18,7 @@ fn handle_oneof(
     oneof: &ProtoOneOfType,
     registry: &ProtoTypeRegistry,
     visibility: ProtoVisibility,
-) -> anyhow::Result<()> {
+) -> Result<(), SerdeError> {
     let message_config = package.message_config(&oneof.message);
     message_config.field_attribute(field_name, parse_quote!(#[tinc(oneof)]));
 
@@ -96,7 +96,9 @@ fn handle_oneof(
     };
 
     for (field_name, field) in &oneof.fields {
-        anyhow::ensure!(!field.options.flatten, "oneof fields cannot be flattened");
+        if field.options.flatten {
+            return Err(SerdeError::OneofFlattened);
+        }
 
         let ident = quote::format_ident!("__field_{field_name}");
         let serde_name = &field.options.serde_name;
@@ -387,7 +389,7 @@ fn handle_message_field(
     field_builder: FieldBuilder<'_>,
     field_enum_ident: &syn::Ident,
     registry: &ProtoTypeRegistry,
-) -> anyhow::Result<()> {
+) -> Result<(), SerdeError> {
     let serde_name = &field.options.serde_name;
 
     let message_config = package.message_config(&field.message);
@@ -410,7 +412,7 @@ fn handle_message_field(
             ProtoType::Modified(ProtoModifiedValueType::OneOf(oneof)) => {
                 oneof.rust_path(&message.package)
             }
-            _ => anyhow::bail!("flattened fields must be messages or oneofs"),
+            _ => return Err(SerdeError::FlattenedFieldNotMessageOrOneof),
         };
 
         if field.options.visibility.has_output() {
@@ -646,7 +648,7 @@ fn cel_expressions(
     options: &ProtoFieldOptions,
     value_accessor: proc_macro2::TokenStream,
     tracker_accessor: proc_macro2::TokenStream,
-) -> anyhow::Result<Vec<proc_macro2::TokenStream>> {
+) -> Result<Vec<proc_macro2::TokenStream>, SerdeError> {
     let compiler = Compiler::new(registry);
     let mut cel_validation_fn = Vec::new();
 
@@ -655,12 +657,13 @@ fn cel_expressions(
         if let Some(this) = expr.this.clone() {
             ctx.add_variable("this", CompiledExpr::constant(this));
         }
-        let parsed = cel_parser::parse(&expr.expression).context("expression parse")?;
-        let resolved = ctx.resolve(&parsed).context("cel expression")?;
+        let parsed = cel_parser::parse(&expr.expression).map_err(SerdeError::ExpressionParse)?;
+        let resolved = ctx.resolve(&parsed).map_err(SerdeError::CelExpression)?;
         let expr_str = &expr.expression;
-        let message = eval_message_fmt(field_full_name, &expr.message, &ctx).context("message")?;
+        let message = eval_message_fmt(field_full_name, &expr.message, &ctx)
+            .map_err(SerdeError::MessageFormat)?;
 
-        anyhow::Ok(quote! {
+        Ok::<_, SerdeError>(quote! {
             if !::tinc::__private::cel::to_bool({
                 (|| {
                     ::core::result::Result::Ok::<_, ::tinc::__private::cel::CelError>(#resolved)
@@ -712,7 +715,7 @@ fn cel_expressions(
             .field
             .iter()
             .map(|expr| evaluate_expr(&compiler, expr))
-            .collect::<anyhow::Result<Vec<_>>>()?;
+            .collect::<Result<Vec<_>, _>>()?;
 
         if recursive_validate {
             exprs.push(quote! {
@@ -772,7 +775,7 @@ fn cel_expressions(
                     .map_key
                     .iter()
                     .map(|expr| evaluate_expr(&compiler, expr))
-                    .collect::<anyhow::Result<Vec<_>>>()?
+                    .collect::<Result<Vec<_>, _>>()?
             };
 
             let is_message = matches!(value, ProtoValueType::Message(_));
@@ -794,7 +797,7 @@ fn cel_expressions(
                     .map_value
                     .iter()
                     .map(|expr| evaluate_expr(&compiler, expr))
-                    .collect::<anyhow::Result<Vec<_>>>()?
+                    .collect::<Result<Vec<_>, _>>()?
             };
 
             if is_message {
@@ -838,7 +841,7 @@ fn cel_expressions(
                 .repeated_item
                 .iter()
                 .map(|expr| evaluate_expr(&compiler, expr))
-                .collect::<anyhow::Result<Vec<_>>>()?;
+                .collect::<Result<Vec<_>, _>>()?;
 
             if is_message {
                 exprs.push(quote!({
@@ -868,7 +871,7 @@ pub(super) fn handle_message(
     message: &ProtoMessageType,
     package: &mut Package,
     registry: &ProtoTypeRegistry,
-) -> anyhow::Result<()> {
+) -> Result<(), SerdeError> {
     let message_config = package.message_config(&message.full_name);
 
     message_config.attribute(parse_quote!(#[derive(::tinc::reexports::serde_derive::Serialize)]));
@@ -925,13 +928,13 @@ pub(super) fn handle_message(
                 expr_ctx.add_variable("this", CompiledExpr::constant(this));
             }
             let parsed = cel_parser::parse(&expr.expression)
-                .context("message-level cel expression parse")?;
+                .map_err(SerdeError::MessageLevelExpressionParse)?;
             let resolved = expr_ctx
                 .resolve(&parsed)
-                .context("message-level cel expression")?;
+                .map_err(SerdeError::MessageLevelCelExpression)?;
             let expr_str = &expr.expression;
             let message_str = eval_message_fmt(&message.full_name, &expr.message, &expr_ctx)
-                .context("message-level cel message")?;
+                .map_err(SerdeError::MessageLevelMessageFormat)?;
 
             message_cel_exprs.push(quote! {
                 if !::tinc::__private::cel::to_bool({
@@ -1054,7 +1057,7 @@ pub(super) fn handle_enum(
     enum_: &ProtoEnumType,
     package: &mut Package,
     registry: &ProtoTypeRegistry,
-) -> anyhow::Result<()> {
+) -> Result<(), SerdeError> {
     let enum_path = registry
         .resolve_rust_path(&enum_.package, &enum_.full_name)
         .expect("enum not found");

@@ -432,6 +432,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "convert_case"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "affbf0190ed2caf063e3def54ff444b449371d55c58e513a95ab98eca50adb49"
+dependencies = [
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "core-foundation-sys"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -539,7 +548,7 @@ dependencies = [
 name = "embed-changelog"
 version = "0.1.2"
 dependencies = [
- "convert_case",
+ "convert_case 0.8.0",
  "fmtools",
  "proc-macro2",
  "quote",
@@ -2112,13 +2121,11 @@ dependencies = [
 name = "tinc-build"
 version = "0.2.3"
 dependencies = [
- "anyhow",
  "base64",
  "bytes",
  "cel-parser",
- "convert_case",
+ "convert_case 0.11.0",
  "document-features",
- "fmtools",
  "heck",
  "indexmap",
  "insta",

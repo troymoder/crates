@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 
-use anyhow::Context;
 use base64::Engine;
 use indexmap::IndexMap;
 use openapiv3_1::{Object, Ref, Schema, Type};
@@ -11,6 +10,7 @@ use tinc_cel::{CelValue, NumberTy};
 use crate::codegen::cel::compiler::{CompiledExpr, Compiler, CompilerTarget, ConstantCompiledExpr};
 use crate::codegen::cel::{CelExpression, CelExpressions, functions};
 use crate::codegen::utils::field_ident_from_str;
+use crate::error::OpenApiError;
 use crate::types::{
     ProtoModifiedValueType, ProtoPath, ProtoType, ProtoTypeRegistry, ProtoValueType,
     ProtoWellKnownType,
@@ -19,7 +19,7 @@ use crate::types::{
 fn cel_to_json(
     cel: &CelValue<'static>,
     type_registry: &ProtoTypeRegistry,
-) -> anyhow::Result<serde_json::Value> {
+) -> Result<serde_json::Value, OpenApiError> {
     match cel {
         CelValue::Null => Ok(serde_json::Value::Null),
         CelValue::Bool(b) => Ok(serde_json::Value::Bool(*b)),
@@ -29,25 +29,25 @@ fn cel_to_json(
                     if let CelValue::String(key) = key {
                         Ok((key.to_string(), cel_to_json(value, type_registry)?))
                     } else {
-                        anyhow::bail!("map keys must be a string")
+                        Err(OpenApiError::MapKeyNotString)
                     }
                 })
-                .collect::<anyhow::Result<_>>()?,
+                .collect::<Result<_, _>>()?,
         )),
         CelValue::List(list) => Ok(serde_json::Value::Array(
             list.iter()
                 .map(|i| cel_to_json(i, type_registry))
-                .collect::<anyhow::Result<_>>()?,
+                .collect::<Result<_, _>>()?,
         )),
         CelValue::String(s) => Ok(serde_json::Value::String(s.to_string())),
         CelValue::Number(NumberTy::F64(f)) => Ok(serde_json::Value::Number(
-            serde_json::Number::from_f64(*f).context("f64 is not a valid float")?,
+            serde_json::Number::from_f64(*f).ok_or(OpenApiError::InvalidF64)?,
         )),
         CelValue::Number(NumberTy::I64(i)) => Ok(serde_json::Value::Number(
-            serde_json::Number::from_i128(*i as i128).context("i64 is not a valid int")?,
+            serde_json::Number::from_i128(*i as i128).ok_or(OpenApiError::InvalidI64)?,
         )),
         CelValue::Number(NumberTy::U64(u)) => Ok(serde_json::Value::Number(
-            serde_json::Number::from_u128(*u as u128).context("u64 is not a valid uint")?,
+            serde_json::Number::from_u128(*u as u128).ok_or(OpenApiError::InvalidU64)?,
         )),
         CelValue::Duration(duration) => Ok(serde_json::Value::String(duration.to_string())),
         CelValue::Timestamp(timestamp) => Ok(serde_json::Value::String(timestamp.to_rfc3339())),
@@ -55,9 +55,9 @@ fn cel_to_json(
             base64::engine::general_purpose::STANDARD.encode(bytes),
         )),
         CelValue::Enum(cel_enum) => {
-            let enum_ty = type_registry
-                .get_enum(&cel_enum.tag)
-                .with_context(|| format!("couldnt find enum {}", cel_enum.tag.as_ref()))?;
+            let enum_ty = type_registry.get_enum(&cel_enum.tag).ok_or_else(|| {
+                OpenApiError::EnumNotFound(ProtoPath::new(cel_enum.tag.as_ref().to_string()))
+            })?;
             if enum_ty.options.repr_enum {
                 Ok(serde_json::Value::from(cel_enum.value))
             } else {
@@ -65,12 +65,9 @@ fn cel_to_json(
                     .variants
                     .values()
                     .find(|v| v.value == cel_enum.value)
-                    .with_context(|| {
-                        format!(
-                            "{} has no value for {}",
-                            cel_enum.tag.as_ref(),
-                            cel_enum.value
-                        )
+                    .ok_or_else(|| OpenApiError::EnumValueNotFound {
+                        enum_path: ProtoPath::new(cel_enum.tag.as_ref().to_string()),
+                        value: cel_enum.value,
                     })?;
                 Ok(serde_json::Value::from(variant.options.serde_name.clone()))
             }
@@ -78,12 +75,12 @@ fn cel_to_json(
     }
 }
 
-fn parse_resolve(compiler: &Compiler, expr: &str) -> anyhow::Result<CelValue<'static>> {
-    let expr = cel_parser::parse(expr).context("parse")?;
-    let resolved = compiler.resolve(&expr).context("resolve")?;
+fn parse_resolve(compiler: &Compiler, expr: &str) -> Result<CelValue<'static>, OpenApiError> {
+    let expr = cel_parser::parse(expr).map_err(OpenApiError::CelParse)?;
+    let resolved = compiler.resolve(&expr).map_err(OpenApiError::CelResolve)?;
     match resolved {
         CompiledExpr::Constant(ConstantCompiledExpr { value }) => Ok(value),
-        CompiledExpr::Runtime(_) => anyhow::bail!("expression needs runtime evaluation"),
+        CompiledExpr::Runtime(_) => Err(OpenApiError::ExpressionNeedsRuntimeEvaluation),
     }
 }
 
@@ -91,7 +88,7 @@ fn handle_expr(
     mut ctx: Compiler,
     ty: &ProtoType,
     expr: &CelExpression,
-) -> anyhow::Result<Vec<Schema>> {
+) -> Result<Vec<Schema>, OpenApiError> {
     ctx.set_target(CompilerTarget::Serde);
 
     if let Some(this) = expr.this.clone() {
@@ -107,7 +104,7 @@ fn handle_expr(
         let value = parse_resolve(&ctx, schema)?;
         let value = cel_to_json(&value, ctx.registry())?;
         if !value.is_null() {
-            schemas.push(serde_json::from_value(value).context("bad openapi schema")?);
+            schemas.push(serde_json::from_value(value).map_err(OpenApiError::BadSchema)?);
         }
     }
 
@@ -184,9 +181,9 @@ fn input_field_getter_gen(
     ty: &ProtoValueType,
     mut mapping: TokenStream,
     field_str: &str,
-) -> anyhow::Result<FieldExtract> {
+) -> Result<FieldExtract, OpenApiError> {
     let ProtoValueType::Message(path) = ty else {
-        anyhow::bail!("cannot extract field on non-message type: {field_str}");
+        return Err(OpenApiError::ExtractFieldNonMessage(field_str.to_string()));
     };
 
     let mut next_message = Some(registry.get_message(path).unwrap());
@@ -196,7 +193,7 @@ fn input_field_getter_gen(
     let mut full_name = None;
     for part in field_str.split('.') {
         let Some(field) = next_message.and_then(|message| message.fields.get(part)) else {
-            anyhow::bail!("message does not have field: {field_str}");
+            return Err(OpenApiError::MessageMissingField(field_str.to_string()));
         };
 
         let field_ident = field_ident_from_str(part);
@@ -248,9 +245,9 @@ fn output_field_getter_gen(
     ty: &ProtoValueType,
     mut mapping: TokenStream,
     field_str: &str,
-) -> anyhow::Result<FieldExtract> {
+) -> Result<FieldExtract, OpenApiError> {
     let ProtoValueType::Message(path) = ty else {
-        anyhow::bail!("cannot extract field on non-message type: {field_str}");
+        return Err(OpenApiError::ExtractFieldNonMessage(field_str.to_string()));
     };
 
     let mut next_message = Some(registry.get_message(path).unwrap());
@@ -260,7 +257,7 @@ fn output_field_getter_gen(
     let mut full_name = None;
     for part in field_str.split('.') {
         let Some(field) = next_message.and_then(|message| message.fields.get(part)) else {
-            anyhow::bail!("message does not have field: {field_str}");
+            return Err(OpenApiError::MessageMissingField(field_str.to_string()));
         };
 
         let field_ident = field_ident_from_str(part);
@@ -343,7 +340,7 @@ fn path_struct(
     package: &str,
     fields: &[String],
     mapping: TokenStream,
-) -> anyhow::Result<PathFields> {
+) -> Result<PathFields, OpenApiError> {
     let mut defs = Vec::new();
     let mut mappings = Vec::new();
     let mut param_schemas = IndexMap::new();
@@ -431,7 +428,7 @@ fn path_struct(
                 };
 
                 let Some(tokens) = ty.as_ref().and_then(match_single_ty) else {
-                    anyhow::bail!("type cannot be mapped: {ty:?}");
+                    return Err(OpenApiError::TypeCannotBeMapped(format!("{:?}", ty)));
                 };
 
                 let ty = ty.unwrap();
@@ -446,15 +443,15 @@ fn path_struct(
         }
         ty => {
             let Some(ty) = match_single_ty(ty) else {
-                anyhow::bail!("type cannot be mapped: {ty:?}");
+                return Err(OpenApiError::TypeCannotBeMapped(format!("{:?}", ty)));
             };
 
             if fields.len() != 1 {
-                anyhow::bail!("well-known type can only have one field");
+                return Err(OpenApiError::WellKnownTypeMultipleFields);
             }
 
             if fields[0] != "value" {
-                anyhow::bail!("well-known type can only have field 'value'");
+                return Err(OpenApiError::WellKnownTypeWrongField);
             }
 
             mappings.push(quote! {{
@@ -548,7 +545,7 @@ impl<'a> OutputGenerator<'a> {
 }
 
 impl InputGenerator<'_> {
-    fn consume_field(&mut self, field: &str) -> anyhow::Result<()> {
+    fn consume_field(&mut self, field: &str) -> Result<(), OpenApiError> {
         let mut parts = field.split('.').peekable();
         let first_part = parts.next().expect("parts empty").to_owned();
 
@@ -565,7 +562,7 @@ impl InputGenerator<'_> {
         // Iterate over the remaining parts of the path
         while let Some(part) = parts.next() {
             match current_map {
-                ExcludePaths::True => anyhow::bail!("duplicate path: {field}"),
+                ExcludePaths::True => return Err(OpenApiError::DuplicatePath(field.to_string())),
                 ExcludePaths::Child(map) => {
                     current_map = map
                         .entry(part.to_owned())
@@ -578,10 +575,9 @@ impl InputGenerator<'_> {
             }
         }
 
-        anyhow::ensure!(
-            matches!(current_map, ExcludePaths::True),
-            "duplicate path: {field}"
-        );
+        if !matches!(current_map, ExcludePaths::True) {
+            return Err(OpenApiError::DuplicatePath(field.to_string()));
+        }
 
         Ok(())
     }
@@ -595,7 +591,7 @@ impl InputGenerator<'_> {
     pub(super) fn generate_query_parameter(
         &mut self,
         field: Option<&str>,
-    ) -> anyhow::Result<GeneratedParams> {
+    ) -> Result<GeneratedParams, OpenApiError> {
         let mut params = Vec::new();
 
         let extract = if let Some(field) = field {
@@ -616,7 +612,7 @@ impl InputGenerator<'_> {
             match self.used_paths.get(field) {
                 Some(ExcludePaths::Child(c)) => Some(c),
                 Some(ExcludePaths::True) => {
-                    anyhow::bail!("{field} is already used by another operation")
+                    return Err(OpenApiError::FieldAlreadyUsed(field.to_string()));
                 }
                 None => None,
             }
@@ -625,7 +621,7 @@ impl InputGenerator<'_> {
         };
 
         if extract.ty.nested() {
-            anyhow::bail!("query string cannot be used on nested types.")
+            return Err(OpenApiError::QueryStringNestedTypes);
         }
 
         let message_ty = match extract.ty.value_type() {
@@ -633,7 +629,7 @@ impl InputGenerator<'_> {
             Some(ProtoValueType::WellKnown(ProtoWellKnownType::Empty)) => {
                 return Ok(GeneratedParams::default());
             }
-            _ => anyhow::bail!("query string can only be used on message types."),
+            _ => return Err(OpenApiError::QueryStringNonMessage),
         };
 
         for (name, field) in &message_ty.fields {
@@ -688,7 +684,7 @@ impl InputGenerator<'_> {
     pub(super) fn generate_path_parameter(
         &mut self,
         path: &str,
-    ) -> anyhow::Result<GeneratedParams> {
+    ) -> Result<GeneratedParams, OpenApiError> {
         let params = parse_route(path);
         if params.is_empty() {
             return Ok(GeneratedParams::default());
@@ -757,7 +753,7 @@ impl InputGenerator<'_> {
         body_method: BodyMethod,
         field: Option<&str>,
         content_type_field: Option<&str>,
-    ) -> anyhow::Result<GeneratedBody<openapiv3_1::request_body::RequestBody>> {
+    ) -> Result<GeneratedBody<openapiv3_1::request_body::RequestBody>, OpenApiError> {
         let content_type = if let Some(content_type_field) = content_type_field {
             self.consume_field(content_type_field)?;
             let extract = input_field_getter_gen(
@@ -767,12 +763,12 @@ impl InputGenerator<'_> {
                 content_type_field,
             )?;
 
-            anyhow::ensure!(
-                matches!(extract.ty.value_type(), Some(ProtoValueType::String)),
-                "content-type must be a string type"
-            );
-
-            anyhow::ensure!(!extract.ty.nested(), "content-type cannot be nested");
+            if !matches!(extract.ty.value_type(), Some(ProtoValueType::String)) {
+                return Err(OpenApiError::ContentTypeNotString);
+            }
+            if extract.ty.nested() {
+                return Err(OpenApiError::ContentTypeNested);
+            }
 
             let modifier = if extract.is_optional {
                 quote! {
@@ -802,7 +798,7 @@ impl InputGenerator<'_> {
             match self.used_paths.get(field) {
                 Some(ExcludePaths::Child(c)) => Some(c),
                 Some(ExcludePaths::True) => {
-                    anyhow::bail!("{field} is already used by another operation")
+                    return Err(OpenApiError::FieldAlreadyUsed(field.to_string()));
                 }
                 None => None,
             }
@@ -828,20 +824,20 @@ impl InputGenerator<'_> {
         match body_method {
             BodyMethod::Json => {}
             BodyMethod::Binary(_) => {
-                anyhow::ensure!(
-                    matches!(extract.ty.value_type(), Some(ProtoValueType::Bytes)),
-                    "binary bodies must be on bytes fields."
-                );
-
-                anyhow::ensure!(!extract.ty.nested(), "binary bodies cannot be nested");
+                if !matches!(extract.ty.value_type(), Some(ProtoValueType::Bytes)) {
+                    return Err(OpenApiError::BinaryBodyNonBytes);
+                }
+                if extract.ty.nested() {
+                    return Err(OpenApiError::BinaryBodyNested);
+                }
             }
             BodyMethod::Text => {
-                anyhow::ensure!(
-                    matches!(extract.ty.value_type(), Some(ProtoValueType::String)),
-                    "text bodies must be on string fields."
-                );
-
-                anyhow::ensure!(!extract.ty.nested(), "text bodies cannot be nested");
+                if !matches!(extract.ty.value_type(), Some(ProtoValueType::String)) {
+                    return Err(OpenApiError::TextBodyNonString);
+                }
+                if extract.ty.nested() {
+                    return Err(OpenApiError::TextBodyNested);
+                }
             }
         }
 
@@ -889,7 +885,7 @@ impl OutputGenerator<'_> {
         body_method: BodyMethod,
         field: Option<&str>,
         content_type_field: Option<&str>,
-    ) -> anyhow::Result<GeneratedBody<openapiv3_1::response::Response>> {
+    ) -> Result<GeneratedBody<openapiv3_1::response::Response>, OpenApiError> {
         let builder_ident = &self.builder_ident;
 
         let content_type = if let Some(content_type_field) = content_type_field {
@@ -900,12 +896,12 @@ impl OutputGenerator<'_> {
                 content_type_field,
             )?;
 
-            anyhow::ensure!(
-                matches!(extract.ty.value_type(), Some(ProtoValueType::String)),
-                "content-type must be a string type"
-            );
-
-            anyhow::ensure!(!extract.ty.nested(), "content-type cannot be nested");
+            if !matches!(extract.ty.value_type(), Some(ProtoValueType::String)) {
+                return Err(OpenApiError::ContentTypeNotString);
+            }
+            if extract.ty.nested() {
+                return Err(OpenApiError::ContentTypeNested);
+            }
 
             let modifier = if extract.is_optional {
                 quote!(Some(ct))
@@ -957,12 +953,12 @@ impl OutputGenerator<'_> {
                     .body(::tinc::reexports::axum::body::Body::from(writer.into_inner().freeze()))
             }),
             BodyMethod::Binary(_) => {
-                anyhow::ensure!(
-                    matches!(extract.ty.value_type(), Some(ProtoValueType::Bytes)),
-                    "binary bodies must be on bytes fields."
-                );
-
-                anyhow::ensure!(!extract.ty.nested(), "binary bodies cannot be nested");
+                if !matches!(extract.ty.value_type(), Some(ProtoValueType::Bytes)) {
+                    return Err(OpenApiError::BinaryBodyNonBytes);
+                }
+                if extract.ty.nested() {
+                    return Err(OpenApiError::BinaryBodyNested);
+                }
 
                 let matcher = if extract.is_optional {
                     quote!(Some(bytes))
@@ -980,12 +976,12 @@ impl OutputGenerator<'_> {
                 })
             }
             BodyMethod::Text => {
-                anyhow::ensure!(
-                    matches!(extract.ty.value_type(), Some(ProtoValueType::String)),
-                    "text bodies must be on string fields."
-                );
-
-                anyhow::ensure!(!extract.ty.nested(), "text bodies cannot be nested");
+                if !matches!(extract.ty.value_type(), Some(ProtoValueType::String)) {
+                    return Err(OpenApiError::TextBodyNonString);
+                }
+                if extract.ty.nested() {
+                    return Err(OpenApiError::TextBodyNested);
+                }
 
                 let matcher = if extract.is_optional {
                     quote!(Some(text))
@@ -1041,7 +1037,7 @@ fn generate(
     used_paths: &BTreeMap<String, ExcludePaths>,
     direction: GenerateDirection,
     bytes: BytesEncoding,
-) -> anyhow::Result<Schema> {
+) -> Result<Schema, OpenApiError> {
     fn internal_generate(
         field_info: &FieldInfo,
         components: &mut openapiv3_1::Components,
@@ -1049,7 +1045,7 @@ fn generate(
         used_paths: &BTreeMap<String, ExcludePaths>,
         direction: GenerateDirection,
         bytes: BytesEncoding,
-    ) -> anyhow::Result<Schema> {
+    ) -> Result<Schema, OpenApiError> {
         let mut schemas = Vec::new();
         let ty = field_info.ty.clone();
         let cel = field_info.cel;
@@ -1167,7 +1163,7 @@ fn generate(
                                     bytes,
                                 )?;
 
-                                anyhow::Ok(Schema::object(
+                                Ok::<_, OpenApiError>(Schema::object(
                                     Object::builder()
                                         .schema_type(Type::Object)
                                         .title(name)
@@ -1192,7 +1188,7 @@ fn generate(
                                         .build(),
                                 ))
                             })
-                            .collect::<anyhow::Result<Vec<_>>>()?
+                            .collect::<Result<Vec<_>, _>>()?
                     } else {
                         oneof
                             .fields
@@ -1215,7 +1211,7 @@ fn generate(
                                     bytes,
                                 )?;
 
-                                anyhow::Ok(Schema::object(
+                                Ok::<_, OpenApiError>(Schema::object(
                                     Object::builder()
                                         .schema_type(Type::Object)
                                         .title(name)
@@ -1229,7 +1225,7 @@ fn generate(
                                         .build(),
                                 ))
                             })
-                            .collect::<anyhow::Result<Vec<_>>>()?
+                            .collect::<Result<Vec<_>, _>>()?
                     })
                     .unevaluated_properties(false)
                     .build(),
@@ -1298,7 +1294,7 @@ fn generate(
             ProtoType::Value(ProtoValueType::Enum(enum_path)) => {
                 let ety = types
                     .get_enum(&enum_path)
-                    .with_context(|| format!("missing enum: {enum_path}"))?;
+                    .ok_or_else(|| OpenApiError::MissingEnum(enum_path.clone()))?;
                 let schema_name =
                     if ety.variants.values().any(|v| {
                         v.options.visibility.has_input() != v.options.visibility.has_output()
@@ -1352,7 +1348,7 @@ fn generate(
             ref ty @ ProtoType::Value(ProtoValueType::Message(ref message_path)) => {
                 let message_ty = types
                     .get_message(message_path)
-                    .with_context(|| format!("missing message: {message_path}"))?;
+                    .ok_or_else(|| OpenApiError::MissingMessage(message_path.clone()))?;
 
                 let schema_name =
                     if message_ty.fields.values().any(|v| {

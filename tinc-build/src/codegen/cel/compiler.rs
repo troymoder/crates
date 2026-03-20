@@ -48,7 +48,7 @@ impl std::fmt::Debug for RuntimeCompiledExpr {
             .field("ty", &self.ty)
             .field(
                 "expr",
-                &fmtools::fmt(|fmt| {
+                &std::fmt::from_fn(|fmt| {
                     let expr = &self.expr;
                     let tokens = parse_quote! {
                         const _: Debug = #expr;

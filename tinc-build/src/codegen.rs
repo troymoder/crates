@@ -4,7 +4,10 @@ pub(crate) use config::AttributeConfig;
 use service::{ProcessedService, handle_service};
 
 use self::serde::{handle_enum, handle_message};
-use crate::types::{ProtoPath, ProtoTypeRegistry};
+use crate::{
+    error::CodegenError,
+    types::{ProtoPath, ProtoTypeRegistry},
+};
 
 pub(crate) mod cel;
 mod config;
@@ -42,7 +45,7 @@ impl std::ops::DerefMut for Package {
 
 pub(crate) fn generate_modules(
     registry: &ProtoTypeRegistry,
-) -> anyhow::Result<BTreeMap<ProtoPath, Package>> {
+) -> Result<BTreeMap<ProtoPath, Package>, CodegenError> {
     let mut modules = BTreeMap::new();
 
     registry

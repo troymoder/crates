@@ -21,13 +21,11 @@ prost = ["dep:prost", "dep:prost-reflect", "dep:prost-build", "dep:prost-types"]
 docs = ["dep:document-features"]
 
 [dependencies]
-anyhow = "1"
 base64 = "0.22"
 bytes = "1"
-cel-parser = { version = "0.8" }
-convert_case = "0.8"
+cel-parser = "0.8"
+convert_case = "0.11"
 document-features = { optional = true, version = "0.2" }
-fmtools = "0.1"
 heck = "0.5"
 indexmap = "2"
 num-traits = "0.2"

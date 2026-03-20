@@ -1,18 +1,21 @@
 use std::collections::BTreeMap;
 
-use anyhow::Context;
 use convert_case::{Case, Casing};
 use indexmap::IndexMap;
 use prost_reflect::prost_types::source_code_info::Location;
 use prost_reflect::{
-    DescriptorPool, EnumDescriptor, ExtensionDescriptor, FileDescriptor, Kind, MessageDescriptor,
-    ServiceDescriptor,
+    DescriptorPool, EnumDescriptor, EnumValueDescriptor, ExtensionDescriptor, FieldDescriptor,
+    FileDescriptor, Kind, MessageDescriptor, ServiceDescriptor,
 };
 use quote::format_ident;
 use tinc_cel::{CelEnum, CelValueConv};
 
 use crate::codegen::cel::{CelExpression, CelExpressions};
 use crate::codegen::prost_sanatize::{strip_enum_prefix, to_upper_camel};
+use crate::error::{
+    ProstExploreEnumError, ProstExploreError, ProstExploreMessageError, ProstExploreServiceError,
+    ProstExtensionDecodeError,
+};
 use crate::types::{
     Comments, ProtoEnumOptions, ProtoEnumType, ProtoEnumVariant, ProtoEnumVariantOptions,
     ProtoFieldOptions, ProtoFieldSerdeOmittable, ProtoMessageField, ProtoMessageOptions,
@@ -22,7 +25,7 @@ use crate::types::{
 };
 
 pub(crate) struct Extension<T> {
-    name: &'static str,
+    _name: &'static str,
     descriptor: Option<ExtensionDescriptor>,
     _marker: std::marker::PhantomData<T>,
 }
@@ -30,7 +33,7 @@ pub(crate) struct Extension<T> {
 impl<T> Extension<T> {
     fn new(name: &'static str, pool: &DescriptorPool) -> Self {
         Self {
-            name,
+            _name: name,
             descriptor: pool.get_extension_by_name(name),
             _marker: std::marker::PhantomData,
         }
@@ -40,7 +43,7 @@ impl<T> Extension<T> {
         self.descriptor.as_ref()
     }
 
-    fn decode(&self, incoming: &T::Incoming) -> anyhow::Result<Option<T>>
+    fn decode(&self, incoming: &T::Incoming) -> Result<Option<T>, ProstExtensionDecodeError>
     where
         T: ProstExtension,
     {
@@ -52,7 +55,7 @@ impl<T> Extension<T> {
         })
     }
 
-    fn decode_all(&self, incoming: &T::Incoming) -> anyhow::Result<Vec<T>>
+    fn decode_all(&self, incoming: &T::Incoming) -> Result<Vec<T>, ProstExtensionDecodeError>
     where
         T: ProstExtension,
     {
@@ -70,13 +73,9 @@ impl<T> Extension<T> {
         match message.as_ref() {
             prost_reflect::Value::Message(message) => {
                 if message.fields().next().is_some() {
-                    let message = message.transcode_to::<T>().with_context(|| {
-                        format!(
-                            "{} is not a valid {}",
-                            self.name,
-                            std::any::type_name::<T>()
-                        )
-                    })?;
+                    let message = message
+                        .transcode_to::<T>()
+                        .map_err(ProstExtensionDecodeError::TranscodeFailed)?;
                     Ok(vec![message])
                 } else {
                     Ok(Vec::new())
@@ -85,11 +84,15 @@ impl<T> Extension<T> {
             prost_reflect::Value::List(list) => list
                 .iter()
                 .map(|value| {
-                    let message = value.as_message().context("expected a message")?;
-                    message.transcode_to::<T>().context("transcoding failed")
+                    let message = value
+                        .as_message()
+                        .ok_or(ProstExtensionDecodeError::ExpectedMessage)?;
+                    message
+                        .transcode_to::<T>()
+                        .map_err(ProstExtensionDecodeError::TranscodeFailed)
                 })
                 .collect(),
-            _ => anyhow::bail!("expected a message or list of messages"),
+            _ => Err(ProstExtensionDecodeError::ExpectedMessageOrList),
         }
     }
 }
@@ -209,17 +212,19 @@ impl<'a> Extensions<'a> {
         }
     }
 
-    pub(crate) fn process(&self, registry: &mut ProtoTypeRegistry) -> anyhow::Result<()> {
+    pub(crate) fn process(
+        &self,
+        registry: &mut ProtoTypeRegistry,
+    ) -> Result<(), ProstExploreError> {
         self.pool
             .files()
             .map(|file| FileWalker::new(file, self))
             .try_for_each(|file| {
-                anyhow::ensure!(
-                    !file.file.package_name().is_empty(),
-                    "you must provide a proto package for file: {}",
-                    file.file.name()
-                );
-
+                if file.file.package_name().is_empty() {
+                    return Err(ProstExploreError::EmptyPackage(
+                        file.file.name().to_string(),
+                    ));
+                }
                 file.process(registry)
             })
     }
@@ -262,23 +267,20 @@ impl<'a> FileWalker<'a> {
         Some(&self.locations[idx])
     }
 
-    fn process(&self, registry: &mut ProtoTypeRegistry) -> anyhow::Result<()> {
+    fn process(&self, registry: &mut ProtoTypeRegistry) -> Result<(), ProstExploreError> {
         for message in self.file.messages() {
-            // FileDescriptorProto.message_type = 4
             self.process_message(&message, registry)
-                .with_context(|| format!("message {}", message.full_name()))?;
+                .map_err(|e| ProstExploreError::Message(message.full_name().to_string(), e))?;
         }
 
         for enum_ in self.file.enums() {
-            // FileDescriptorProto.enum_type = 5
             self.process_enum(&enum_, registry)
-                .with_context(|| format!("enum {}", enum_.full_name()))?;
+                .map_err(|e| ProstExploreError::Enum(enum_.full_name().to_string(), e))?;
         }
 
         for service in self.file.services() {
-            // FileDescriptorProto.service = 6
             self.process_service(&service, registry)
-                .with_context(|| format!("service {}", service.full_name()))?;
+                .map_err(|e| ProstExploreError::Service(service.full_name().to_string(), e))?;
         }
 
         Ok(())
@@ -288,7 +290,7 @@ impl<'a> FileWalker<'a> {
         &self,
         service: &ServiceDescriptor,
         registry: &mut ProtoTypeRegistry,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), ProstExploreServiceError> {
         if registry.get_service(service.full_name()).is_some() {
             return Ok(());
         }
@@ -298,7 +300,8 @@ impl<'a> FileWalker<'a> {
         let opts = self
             .extensions
             .ext_service
-            .decode(service)?
+            .decode(service)
+            .map_err(ProstExploreServiceError::ServiceDecode)?
             .unwrap_or_default();
         let service_full_name = ProtoPath::new(service.full_name());
 
@@ -313,7 +316,7 @@ impl<'a> FileWalker<'a> {
                 .extensions
                 .ext_method
                 .decode(&method)
-                .with_context(|| format!("method {}", method.full_name()))?
+                .map_err(ProstExploreServiceError::MethodDecode)?
                 .unwrap_or_default();
 
             let mut endpoints = Vec::new();
@@ -383,20 +386,24 @@ impl<'a> FileWalker<'a> {
         &self,
         message: &MessageDescriptor,
         registry: &mut ProtoTypeRegistry,
-    ) -> anyhow::Result<()> {
-        let opts = self.extensions.ext_message.decode(message)?;
+    ) -> Result<(), ProstExploreMessageError> {
+        let opts = self
+            .extensions
+            .ext_message
+            .decode(message)
+            .map_err(ProstExploreMessageError::MessageDecode)?;
 
-        let fields = message
+        let fields: Vec<(FieldDescriptor, tinc_pb_prost::FieldOptions)> = message
             .fields()
-            .map(|field| {
+            .map(|field: FieldDescriptor| {
                 let opts = self
                     .extensions
                     .ext_field
                     .decode(&field)
-                    .with_context(|| field.full_name().to_owned())?;
-                Ok((field, opts.unwrap_or_default()))
+                    .map_err(ProstExploreMessageError::FieldDecode)?;
+                Ok::<_, ProstExploreMessageError>((field, opts.unwrap_or_default()))
             })
-            .collect::<anyhow::Result<Vec<_>>>()?;
+            .collect::<Result<_, _>>()?;
 
         let opts = opts.unwrap_or_default();
         let message_full_name = ProtoPath::new(message.full_name());
@@ -447,7 +454,12 @@ impl<'a> FileWalker<'a> {
                     &self.extensions.ext_predefined,
                     &field.options(),
                 )
-                .context("gathering cel expressions")?,
+                .map_err(|e| {
+                    ProstExploreMessageError::GatherCel(match e {
+                        ProstExploreError::GatherCelExpressions(inner) => inner,
+                        _ => unreachable!(),
+                    })
+                })?,
             };
 
             let Some(Some(oneof)) = (!proto3_optional).then(|| field.containing_oneof()) else {
@@ -489,7 +501,8 @@ impl<'a> FileWalker<'a> {
             let opts = self
                 .extensions
                 .ext_oneof
-                .decode(&oneof)?
+                .decode(&oneof)
+                .map_err(ProstExploreMessageError::OneofDecode)?
                 .unwrap_or_default();
             let mut entry = message_type.fields.entry(oneof.name().to_owned());
             let oneof = match entry {
@@ -572,7 +585,8 @@ impl<'a> FileWalker<'a> {
         }
 
         for child in message.child_enums() {
-            self.process_enum(&child, registry)?;
+            self.process_enum(&child, registry)
+                .map_err(ProstExploreMessageError::ChildEnum)?;
         }
 
         Ok(())
@@ -582,20 +596,27 @@ impl<'a> FileWalker<'a> {
         &self,
         enum_: &EnumDescriptor,
         registry: &mut ProtoTypeRegistry,
-    ) -> anyhow::Result<()> {
-        let opts = self.extensions.ext_enum.decode(enum_)?;
+    ) -> Result<(), ProstExploreEnumError> {
+        let opts = self
+            .extensions
+            .ext_enum
+            .decode(enum_)
+            .map_err(ProstExploreEnumError::EnumDecode)?;
 
-        let values = enum_
+        let values: Vec<(
+            EnumValueDescriptor,
+            Option<tinc_pb_prost::EnumVariantOptions>,
+        )> = enum_
             .values()
-            .map(|value| {
+            .map(|value: EnumValueDescriptor| {
                 let opts = self
                     .extensions
                     .ext_variant
                     .decode(&value)
-                    .with_context(|| value.full_name().to_owned())?;
-                Ok((value, opts))
+                    .map_err(ProstExploreEnumError::VariantDecode)?;
+                Ok::<_, ProstExploreEnumError>((value, opts))
             })
-            .collect::<anyhow::Result<Vec<_>>>()?;
+            .collect::<Result<_, _>>()?;
 
         let opts = opts.unwrap_or_default();
         let rename_all = opts
@@ -665,7 +686,7 @@ enum CelInput {
 pub(crate) fn gather_cel_expressions(
     extension: &Extension<tinc_pb_prost::PredefinedConstraints>,
     field_options: &prost_reflect::DynamicMessage,
-) -> anyhow::Result<CelExpressions> {
+) -> Result<CelExpressions, ProstExploreError> {
     let Some(extension) = extension.descriptor() else {
         return Ok(CelExpressions::default());
     };
@@ -677,9 +698,12 @@ pub(crate) fn gather_cel_expressions(
         let value = field_options.get_extension(extension);
         let predef = value
             .as_message()
-            .context("expected message")?
+            .ok_or(ProstExploreError::GatherCelExpressions(
+                ProstExtensionDecodeError::ExpectedMessage,
+            ))?
             .transcode_to::<tinc_pb_prost::PredefinedConstraints>()
-            .context("invalid predefined constraint")?;
+            .map_err(ProstExtensionDecodeError::TranscodeFailed)
+            .map_err(ProstExploreError::GatherCelExpressions)?;
         match predef.r#type() {
             tinc_pb_prost::predefined_constraints::Type::Unspecified => {}
             tinc_pb_prost::predefined_constraints::Type::CustomExpression => {}
@@ -718,7 +742,7 @@ fn explore_fields(
     input: CelInput,
     value: &prost_reflect::DynamicMessage,
     results: &mut BTreeMap<CelInput, Vec<CelExpression>>,
-) -> anyhow::Result<()> {
+) -> Result<(), ProstExploreError> {
     for (field, value) in value.fields() {
         let options = field.options();
         let mut input = input;

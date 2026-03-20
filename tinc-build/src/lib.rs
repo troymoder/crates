@@ -33,12 +33,14 @@
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
-use anyhow::Context;
 use extern_paths::ExternPaths;
 
+pub use crate::error::BuildError;
+use crate::error::InternalBuildError;
 use crate::path_set::PathSet;
 
 mod codegen;
+mod error;
 mod extern_paths;
 mod path_set;
 
@@ -154,7 +156,7 @@ impl Config {
         &mut self,
         protos: &[impl AsRef<Path>],
         includes: &[impl AsRef<Path>],
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), BuildError> {
         match self.mode {
             #[cfg(feature = "prost")]
             Mode::Prost => self.compile_protos_prost(protos, includes),
@@ -162,7 +164,7 @@ impl Config {
     }
 
     /// Generate tinc code based on a precompiled FileDescriptorSet.
-    pub fn load_fds(&mut self, fds: impl bytes::Buf) -> anyhow::Result<()> {
+    pub fn load_fds(&mut self, fds: impl bytes::Buf) -> Result<(), BuildError> {
         match self.mode {
             #[cfg(feature = "prost")]
             Mode::Prost => self.load_fds_prost(fds),
@@ -174,7 +176,7 @@ impl Config {
         &mut self,
         protos: &[impl AsRef<Path>],
         includes: &[impl AsRef<Path>],
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), BuildError> {
         let fd_path = self.out_dir.join("tinc.fd.bin");
 
         let mut config = prost_build::Config::new();
@@ -184,24 +186,24 @@ impl Config {
 
         {
             let tinc_out = self.out_dir.join("tinc");
-            std::fs::create_dir_all(&tinc_out).context("failed to create tinc directory")?;
+            std::fs::create_dir_all(&tinc_out).map_err(InternalBuildError::CreateTincDir)?;
             std::fs::write(
                 tinc_out.join("annotations.proto"),
                 tinc_pb_prost::TINC_ANNOTATIONS,
             )
-            .context("failed to write tinc_annotations.rs")?;
+            .map_err(InternalBuildError::WriteTincAnnotations)?;
             includes.push(&self.out_dir);
         }
 
         config
             .load_fds(protos, &includes)
-            .context("failed to generate tonic fds")?;
-        let fds_bytes = std::fs::read(fd_path).context("failed to read tonic fds")?;
+            .map_err(|e| InternalBuildError::GenerateTonicFds(Box::new(e)))?;
+        let fds_bytes = std::fs::read(fd_path).map_err(InternalBuildError::ReadTonicFds)?;
         self.load_fds_prost(fds_bytes.as_slice())
     }
 
     #[cfg(feature = "prost")]
-    fn load_fds_prost(&mut self, fds: impl bytes::Buf) -> anyhow::Result<()> {
+    fn load_fds_prost(&mut self, fds: impl bytes::Buf) -> Result<(), BuildError> {
         use std::collections::BTreeMap;
 
         use codegen::prost_sanatize::to_snake;
@@ -214,7 +216,7 @@ impl Config {
         use syn::parse_quote;
         use types::{ProtoPath, ProtoTypeRegistry};
 
-        let pool = DescriptorPool::decode(fds).context("failed to add tonic fds")?;
+        let pool = DescriptorPool::decode(fds).map_err(InternalBuildError::AddTonicFds)?;
 
         let mut registry = ProtoTypeRegistry::new(
             self.mode,
@@ -246,9 +248,10 @@ impl Config {
 
         prost_explore::Extensions::new(&pool)
             .process(&mut registry)
-            .context("failed to process extensions")?;
+            .map_err(InternalBuildError::ProstExplore)?;
 
-        let mut packages = codegen::generate_modules(&registry)?;
+        let mut packages =
+            codegen::generate_modules(&registry).map_err(InternalBuildError::Codegen)?;
 
         packages.iter_mut().for_each(|(path, package)| {
             if self.extern_paths.contains(path) {
@@ -411,7 +414,11 @@ impl Config {
         for package in packages.keys() {
             match std::fs::remove_file(self.out_dir.join(format!("{package}.rs"))) {
                 Err(err) if err.kind() != ErrorKind::NotFound => {
-                    return Err(anyhow::anyhow!(err).context("remove"));
+                    return Err(InternalBuildError::RemoveFile {
+                        path: self.out_dir.join(format!("{package}.rs")),
+                        source: err,
+                    }
+                    .into());
                 }
                 _ => {}
             }
@@ -422,9 +429,11 @@ impl Config {
         };
 
         let fd_path = self.out_dir.join("tinc.fd.bin");
-        std::fs::write(fd_path, fds.encode_to_vec()).context("write fds")?;
+        std::fs::write(fd_path, fds.encode_to_vec()).map_err(InternalBuildError::WriteFds)?;
 
-        config.compile_fds(fds).context("prost compile")?;
+        config
+            .compile_fds(fds)
+            .map_err(|e| InternalBuildError::ProstCompile(Box::new(e)))?;
 
         for (package, module) in &mut packages {
             if self.extern_paths.contains(package) {
@@ -432,8 +441,7 @@ impl Config {
             };
 
             let path = self.out_dir.join(format!("{package}.rs"));
-            write_module(&path, std::mem::take(&mut module.extra_items))
-                .with_context(|| package.to_owned())?;
+            write_module(&path, std::mem::take(&mut module.extra_items))?;
         }
 
         #[derive(Default)]
@@ -480,18 +488,27 @@ impl Config {
                 self.out_dir.join("___root_module.rs"),
                 prettyplease::unparse(&file),
             )
-            .context("write root module")?;
+            .map_err(InternalBuildError::WriteRootModule)?;
         }
 
         Ok(())
     }
 }
 
-fn write_module(path: &std::path::Path, module: Vec<syn::Item>) -> anyhow::Result<()> {
+fn write_module(path: &std::path::Path, module: Vec<syn::Item>) -> Result<(), BuildError> {
     let mut file = match std::fs::read_to_string(path) {
-        Ok(content) if !content.is_empty() => syn::parse_file(&content).context("parse")?,
+        Ok(content) if !content.is_empty() => {
+            syn::parse_file(&content).map_err(|e| InternalBuildError::ParseModule {
+                path: path.to_path_buf(),
+                source: e,
+            })?
+        }
         Err(err) if err.kind() != ErrorKind::NotFound => {
-            return Err(anyhow::anyhow!(err).context("read"));
+            return Err(InternalBuildError::ReadModule {
+                path: path.to_path_buf(),
+                source: err,
+            }
+            .into());
         }
         _ => syn::File {
             attrs: Vec::new(),
@@ -501,7 +518,12 @@ fn write_module(path: &std::path::Path, module: Vec<syn::Item>) -> anyhow::Resul
     };
 
     file.items.extend(module);
-    std::fs::write(path, prettyplease::unparse(&file)).context("write")?;
+    std::fs::write(path, prettyplease::unparse(&file)).map_err(|e| {
+        InternalBuildError::WriteModuleFile {
+            path: path.to_path_buf(),
+            source: e,
+        }
+    })?;
 
     Ok(())
 }

@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
-use anyhow::Context;
 use compiler::{CompiledExpr, CompilerCtx, ConstantCompiledExpr, RuntimeCompiledExpr};
 use functions::Function;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use tinc_cel::CelValue;
+
+use crate::error::CelEvalError;
 
 pub(crate) mod compiler;
 pub(crate) mod functions;
@@ -15,16 +16,15 @@ pub(crate) fn eval_message_fmt(
     field_full_name: &str,
     msg: &str,
     ctx: &compiler::Compiler<'_>,
-) -> anyhow::Result<TokenStream> {
+) -> Result<TokenStream, CelEvalError> {
     let fmt = runtime_format::ParsedFmt::new(msg)
-        .map_err(|err| anyhow::anyhow!("failed to parse message format: {err}"))?;
+        .map_err(|err| CelEvalError::ParseMessageFormat(err.to_string()))?;
 
     let mut runtime_args = Vec::new();
     let mut compile_time_args = HashMap::new();
 
-    // each key itself a cel expression
     for key in fmt.keys() {
-        let expr = cel_parser::parse(key).context("failed to parse cel expression")?;
+        let expr = cel_parser::parse(key).map_err(CelEvalError::ParseCelExpression)?;
         match functions::String.compile(CompilerCtx::new(
             ctx.child(),
             Some(ctx.resolve(&expr)?),
