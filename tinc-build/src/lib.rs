@@ -43,6 +43,7 @@ mod codegen;
 mod error;
 mod extern_paths;
 mod path_set;
+mod proto_source_location;
 
 #[cfg(feature = "prost")]
 mod prost_explore;
